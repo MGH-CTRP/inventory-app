@@ -748,10 +748,16 @@ async function startScan() {
   document.getElementById('bc-manual').value = '';
   document.getElementById('cam-st').textContent = t('camConnecting');
 
+  // 인앱 브라우저 감지 (WhatsApp, Instagram 등) → 카메라 불가
+  if (isInAppBrowser()) {
+    showInAppWarning();
+    return;
+  }
+
   if ('BarcodeDetector' in window) {
-    await startNativeScan();   // 안드로이드 크롬 — 네이티브
+    await startNativeScan();
   } else {
-    await startZXingScan();    // 아이폰 사파리 등 — ZXing 라이브러리
+    await startZXingScan();
   }
 }
 
@@ -796,7 +802,25 @@ function detectNative(vid) {
     .catch(() => { if (CAM_ON) RAF = requestAnimationFrame(() => detectNative(vid)); });
 }
 
-// ── ZXing fallback (아이폰 사파리 / 파이어폭스 등) ──────────
+// ============================================================
+// In-app browser detection (WhatsApp, Instagram, Line, etc.)
+// ============================================================
+function isInAppBrowser() {
+  const ua = navigator.userAgent || '';
+  return /FBAN|FBAV|Instagram|Line\/|WhatsApp|Snapchat|Twitter|TikTok/i.test(ua);
+}
+
+function showInAppWarning() {
+  const el = document.getElementById('cam-st');
+  if (el) el.innerHTML = `
+    <div style="background:#FFF3CD;border:1px solid #FFC107;border-radius:8px;
+      padding:14px;margin:8px 0;text-align:left;font-size:13px;color:#633806;line-height:1.7;">
+      <strong>⚠ 인앱 브라우저에서는 카메라를 사용할 수 없습니다.</strong><br>
+      아래 방법으로 Safari에서 열어주세요:<br><br>
+      <strong>① 오른쪽 하단 ···</strong> 메뉴 클릭<br>
+      <strong>② "Safari로 열기"</strong> 선택
+    </div>`;
+}
 async function loadZXing() {
   if (window.ZXingBrowser) return;
   return new Promise((res, rej) => {
