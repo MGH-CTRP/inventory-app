@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>제품 마스터 생성기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR','Segoe UI',sans-serif;
+  background:#f5f5f5;color:#1a1a1a;padding:32px 20px;max-width:680px;margin:0 auto;}
+h1{font-size:24px;font-weight:700;margin-bottom:6px;}
+.sub{color:#666;font-size:14px;margin-bottom:32px;}
+.card{background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;border:1px solid #e0e0e0;}
+.card h2{font-size:15px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.step{display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;background:#1a1a1a;color:#fff;
+  border-radius:50%;font-size:12px;font-weight:700;flex-shrink:0;}
+.btn{display:inline-block;padding:12px 20px;font-size:14px;font-weight:500;
+  border-radius:8px;border:1.5px solid #ccc;background:#fff;color:#1a1a1a;
+  cursor:pointer;font-family:inherit;transition:all 0.15s;}
+.btn:hover{border-color:#1a1a1a;}
+.btn-p{background:#1a1a1a;color:#fff;border-color:#1a1a1a;}
+.btn-p:hover{background:#333;}
+.btn-a{background:#0F6E56;color:#fff;border-color:#0F6E56;}
+.btn-a:hover{background:#0a5540;}
+.btn:disabled{opacity:0.35;cursor:not-allowed;}
+.btn-full{display:block;width:100%;}
+label{display:block;font-size:12px;font-weight:600;color:#666;
+  letter-spacing:0.05em;text-transform:uppercase;margin-bottom:6px;}
+select{width:100%;padding:10px 12px;font-size:14px;border:1.5px solid #ccc;
+  border-radius:8px;background:#fff;font-family:inherit;margin-bottom:14px;}
+select:focus{outline:none;border-color:#1a1a1a;}
+.upload-area{border:2px dashed #ccc;border-radius:10px;padding:28px;
+  text-align:center;cursor:pointer;margin-bottom:16px;transition:border-color 0.2s;}
+.upload-area:hover{border-color:#0F6E56;}
+.upload-area .ico{font-size:40px;margin-bottom:8px;}
+.upload-area .txt{font-size:15px;font-weight:600;}
+.upload-area .hint{font-size:12px;color:#888;margin-top:4px;}
+.status{padding:12px 16px;border-radius:8px;font-size:14px;margin-bottom:16px;}
+.status.ok{background:#E1F5EE;border:1px solid #9FE1CB;color:#0F6E56;}
+.status.err{background:#FCEBEB;border:1px solid #F09595;color:#8B1A1A;}
+.status.info{background:#E6F1FB;border:1px solid #A8CAEF;color:#185FA5;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{background:#f5f5f5;padding:8px 10px;text-align:left;border-bottom:1px solid #e0e0e0;
+  font-size:11px;font-weight:600;color:#666;letter-spacing:0.05em;text-transform:uppercase;}
+td{padding:8px 10px;border-bottom:1px solid #f0f0f0;color:#1a1a1a;}
+tr:last-child td{border-bottom:none;}
+.preview-wrap{max-height:240px;overflow-y:auto;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:16px;}
+.dl-section{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px;}
+.dl-card{border:1.5px solid #e0e0e0;border-radius:10px;padding:18px;text-align:center;}
+.dl-card .ico2{font-size:28px;margin-bottom:8px;}
+.dl-card .nm{font-size:14px;font-weight:600;margin-bottom:4px;}
+.dl-card .desc{font-size:11px;color:#888;margin-bottom:12px;line-height:1.5;}
+.tag{display:inline-block;padding:2px 7px;border-radius:4px;font-size:11px;font-weight:600;}
+.tag-req{background:#E1F5EE;color:#0F6E56;}
+.tag-opt{background:#f5f5f5;color:#888;}
+.divider{border:none;border-top:1px solid #e0e0e0;margin:16px 0;}
+.col-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+#tpl-btn{margin-top:0;}
+</style>
+</head>
+<body>
+
+<h1>📦 제품 마스터 생성기</h1>
+<p class="sub">재고조사 앱용 마스터 파일을 만드는 도구입니다. Kevin님 PC에서만 실행하세요.</p>
+
+<!-- STEP 1 -->
+<div class="card">
+  <h2><span class="step">1</span> 엑셀 파일 선택</h2>
+  <div class="upload-area" onclick="document.getElementById('xl-inp').click()">
+    <div class="ico">📂</div>
+    <div class="txt">엑셀 파일을 클릭하여 선택</div>
+    <div class="hint">.xlsx / .xls / .csv</div>
+  </div>
+  <input type="file" id="xl-inp" accept=".xlsx,.xls,.csv" style="display:none" onchange="loadXl(event)">
+  <button class="btn" id="tpl-btn" onclick="downloadTemplate()">📥 템플릿 다운로드</button>
+  <div id="xl-status" style="display:none" class="status"></div>
+</div>
+
+<!-- STEP 2 -->
+<div class="card" id="step2" style="display:none">
+  <h2><span class="step">2</span> 컬럼 매핑</h2>
+  <div class="col-row">
+    <div>
+      <label>바코드 컬럼 <span class="tag tag-req">필수</span></label>
+      <select id="m-bc"></select>
+    </div>
+    <div>
+      <label>제품명 컬럼 <span class="tag tag-req">필수</span></label>
+      <select id="m-nm"></select>
+    </div>
+    <div>
+      <label>Category 컬럼 <span class="tag tag-opt">선택</span></label>
+      <select id="m-vd"><option value="">— 없음 —</option></select>
+    </div>
+    <div>
+      <label>박스 입수량 컬럼 <span class="tag tag-opt">선택</span></label>
+      <select id="m-iq"><option value="">— 없음 —</option></select>
+    </div>
+  </div>
+  <button class="btn btn-p btn-full" onclick="buildPreview()">미리보기 →</button>
+</div>
+
+<!-- STEP 3 -->
+<div class="card" id="step3" style="display:none">
+  <h2><span class="step">3</span> 미리보기 확인</h2>
+  <div id="preview-status" class="status ok"></div>
+  <div class="preview-wrap">
+    <table>
+      <thead><tr><th>바코드</th><th>제품명</th><th>Category</th><th>입수량</th></tr></thead>
+      <tbody id="prev-body"></tbody>
+    </table>
+  </div>
+  <button class="btn btn-p btn-full" onclick="generateFiles()">✓ 파일 생성하기</button>
+</div>
+
+<!-- STEP 4 -->
+<div class="card" id="step4" style="display:none">
+  <h2><span class="step">4</span> 파일 다운로드 후 배포</h2>
+  <div class="status info">
+    아래 두 파일을 <strong>inventory-pwa 폴더에 덮어쓰기</strong>한 후 Netlify에 폴더를 드래그앤드롭하세요.
+  </div>
+  <div class="dl-section">
+    <div class="dl-card">
+      <div class="ico2">📄</div>
+      <div class="nm">master.json</div>
+      <div class="desc">제품 마스터 데이터<br><span id="dl-cnt"></span></div>
+      <button class="btn btn-a btn-full" onclick="dlMaster()">다운로드</button>
+    </div>
+    <div class="dl-card">
+      <div class="ico2">⚙</div>
+      <div class="nm">sw.js</div>
+      <div class="desc">버전 정보 포함<br>자동 업데이트 트리거</div>
+      <button class="btn btn-p btn-full" onclick="dlSw()">다운로드</button>
+    </div>
+  </div>
+  <div class="divider"></div>
+  <div style="font-size:13px;color:#666;line-height:1.8;">
+    <strong>Netlify 재배포 순서:</strong><br>
+    1. inventory-pwa 폴더에 두 파일 덮어쓰기<br>
+    2. <a href="https://app.netlify.com" target="_blank">app.netlify.com</a> → 사이트 선택<br>
+    3. Deploys 탭 → "Drag and drop" → 폴더 드롭<br>
+    4. 직원에게 "앱 껐다 켜주세요" 안내
+  </div>
+</div>
+
+<script>
+let XL_ROWS = [], XL_HEADS = [], PRODUCTS = [], SW_VER = '', MASTER_JSON = '';
+
+function loadXl(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'array', cellText: true, cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      // raw:false → 셀의 표시값(텍스트) 그대로 읽음 → 바코드 앞 "0" 보존
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: false });
+      if (data.length < 2) { showSt('xl-status', 'err', '데이터가 없습니다.'); return; }
+      XL_HEADS = data[0].map((h, i) => ({ label: String(h || `열${i+1}`), idx: i }));
+      XL_ROWS = data.slice(1).filter(r => r.some(c => String(c).trim() !== ''));
+      showSt('xl-status', 'ok', `✅ ${XL_ROWS.length.toLocaleString()}행 로드됨 — "${file.name}"`);
+      buildColSelects();
+      document.getElementById('step2').style.display = 'block';
+    } catch(err) {
+      showSt('xl-status', 'err', '파일 오류: ' + err.message);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function buildColSelects() {
+  const mkOpts = (none) => {
+    const n = none ? '<option value="">— 없음 —</option>' : '';
+    return n + XL_HEADS.map(h => `<option value="${h.idx}">${esc(h.label)}</option>`).join('');
+  };
+  ['m-bc','m-nm'].forEach(id => document.getElementById(id).innerHTML = mkOpts(false));
+  ['m-vd','m-iq'].forEach(id => document.getElementById(id).innerHTML = mkOpts(true));
+
+  const guess = kws => {
+    const h = XL_HEADS.find(h => kws.some(k => h.label.toLowerCase().includes(k)));
+    return h ? String(h.idx) : '0';
+  };
+  document.getElementById('m-bc').value = guess(['바코드','barcode','ean','jan','bar']);
+  document.getElementById('m-nm').value = guess(['제품명','품명','상품명','name','제품']);
+  const vg = guess(['category','supplier','vendor','공급','업체']);
+  const ig = guess(['입수','inner','pack','박스']);
+  if (vg !== '0' || XL_HEADS.some(h => ['category','supplier','vendor','공급','업체'].some(k=>h.label.toLowerCase().includes(k))))
+    document.getElementById('m-vd').value = vg;
+  if (ig !== '0' || XL_HEADS.some(h => ['입수','inner','pack'].some(k=>h.label.toLowerCase().includes(k))))
+    document.getElementById('m-iq').value = ig;
+}
+
+function buildPreview() {
+  const bi = document.getElementById('m-bc').value;
+  const ni = document.getElementById('m-nm').value;
+  if (bi === '' || ni === '') { alert('바코드와 제품명 컬럼을 선택하세요.'); return; }
+  const vi = document.getElementById('m-vd').value;
+  const ii = document.getElementById('m-iq').value;
+
+  PRODUCTS = [];
+  for (const row of XL_ROWS) {
+    const bc = String(row[bi] ?? '').trim();  // 반드시 문자열로 변환
+    if (!bc) continue;
+    PRODUCTS.push({
+      barcode: bc,
+      name: String(row[ni] || bc).trim(),
+      vendor: vi !== '' ? String(row[vi] || '').trim() : '',
+      innerQty: ii !== '' ? (parseInt(row[ii]) || 0) : 0
+    });
+  }
+
+  if (!PRODUCTS.length) { alert('유효한 바코드가 없습니다.'); return; }
+
+  const tbody = document.getElementById('prev-body');
+  const sample = PRODUCTS.slice(0, 50);
+  tbody.innerHTML = sample.map(p => `
+    <tr>
+      <td style="font-family:monospace;font-size:12px;">${esc(p.barcode)}</td>
+      <td>${esc(p.name)}</td>
+      <td style="color:#888;">${esc(p.vendor)}</td>
+      <td style="text-align:center;">${p.innerQty || ''}</td>
+    </tr>`).join('');
+
+  const more = PRODUCTS.length > 50 ? ` (상위 50개 표시 / 전체 ${PRODUCTS.length.toLocaleString()}개)` : '';
+  showSt('preview-status', 'ok', `✅ ${PRODUCTS.length.toLocaleString()}개 제품 인식됨${more}`);
+  document.getElementById('step3').style.display = 'block';
+  document.getElementById('step3').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function generateFiles() {
+  const now = new Date();
+  SW_VER = 'inv-' + now.getTime();
+  const meta = {
+    version: SW_VER,
+    count: PRODUCTS.length,
+    updatedAt: now.toLocaleString('ko-KR', { year:'numeric', month:'2-digit', day:'2-digit',
+      hour:'2-digit', minute:'2-digit' })
+  };
+  // compact 배열 형식 — 키 이름 반복 없이 파일 크기 ~50% 절감
+  // rows: [[barcode, name, vendor, innerQty], ...]
+  const rows = PRODUCTS.map(p => [p.barcode, p.name, p.vendor, p.innerQty]);
+  MASTER_JSON = JSON.stringify({ meta, rows });
+  document.getElementById('dl-cnt').textContent =
+    `${PRODUCTS.length.toLocaleString()}개 제품 · ${meta.updatedAt} · ${(MASTER_JSON.length/1024/1024).toFixed(1)}MB`;
+  document.getElementById('step4').style.display = 'block';
+  document.getElementById('step4').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function dlMaster() {
+  if (!MASTER_JSON) { alert('먼저 파일 생성하기를 클릭하세요.'); return; }
+  dl('master.json', MASTER_JSON, 'application/json');
+}
+
+function dlSw() {
+  if (!SW_VER) { alert('먼저 파일 생성하기를 클릭하세요.'); return; }
+  const sw = `const CACHE = '${SW_VER}';
+const ASSETS = [
+  './',
+  './index.html',
+  './manifest.json',
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://unpkg.com/@zxing/browser@0.1.4/umd/index.min.js'
+  // master.json 제외 — 항상 네트워크에서 직접 로드
+];
+
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+
+  // master.json — 캐시 완전 우회, 항상 네트워크에서 직접
+  if (url.pathname.endsWith('master.json')) {
+    e.respondWith(
+      fetch(e.request, { cache: 'no-store' })
+        .catch(() => new Response('{}', { headers: { 'Content-Type': 'application/json' } }))
+    );
+    return;
+  }
+
+  // 나머지 — cache-first
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).then(resp => {
+        if (resp && resp.status === 200) {
+          caches.open(CACHE).then(c => c.put(e.request, resp.clone()));
+        }
+        return resp;
+      }).catch(() => cached);
+    })
+  );
+});
+`;
+  dl('sw.js', sw, 'text/javascript');
+}
+
+function downloadTemplate() {
+  const ws = XLSX.utils.aoa_to_sheet([
+    ['Barcode', 'Product Name', 'Category', 'Inner Qty (PCS/CTN)'],
+    ['8801000000001', 'Product A (example)', 'Category A', 12],
+    ['8801000000002', 'Product B (example)', 'Category B', 24],
+    ['8801000000003', 'Product C (example)', 'Category A', 6],
+  ]);
+  ws['!cols'] = [{wch:18},{wch:24},{wch:16},{wch:10}];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '마스터');
+  XLSX.writeFile(wb, '제품마스터_템플릿.xlsx');
+}
+
+function dl(name, content, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name;
+  a.click();
+}
+
+function showSt(id, type, msg) {
+  const el = document.getElementById(id);
+  el.className = 'status ' + type;
+  el.textContent = msg;
+  el.style.display = 'block';
+}
+
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>

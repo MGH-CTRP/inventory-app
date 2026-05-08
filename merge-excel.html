@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>재고조사 파일 병합기</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans KR','Segoe UI',sans-serif;
+  background:#f5f5f5;color:#1a1a1a;padding:32px 20px;max-width:780px;margin:0 auto;}
+h1{font-size:24px;font-weight:700;margin-bottom:6px;}
+.sub{color:#666;font-size:14px;margin-bottom:28px;line-height:1.6;}
+.card{background:#fff;border-radius:12px;padding:24px;margin-bottom:16px;border:1px solid #e0e0e0;}
+.card-title{font-size:15px;font-weight:600;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.step{display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;background:#1a1a1a;color:#fff;
+  border-radius:50%;font-size:12px;font-weight:700;flex-shrink:0;}
+
+/* Buttons */
+.btn{display:inline-block;padding:11px 18px;font-size:14px;font-weight:500;
+  border-radius:8px;border:1.5px solid #ccc;background:#fff;color:#1a1a1a;
+  cursor:pointer;font-family:inherit;transition:all 0.15s;}
+.btn:hover{border-color:#1a1a1a;}
+.btn-p{background:#1a1a1a;color:#fff;border-color:#1a1a1a;}
+.btn-p:hover{background:#333;}
+.btn-a{background:#0F6E56;color:#fff;border-color:#0F6E56;}
+.btn-a:hover{background:#0a5540;}
+.btn-d{color:#8B1A1A;border-color:#F09595;background:#FCEBEB;}
+.btn:disabled{opacity:0.35;cursor:not-allowed;}
+.btn-full{display:block;width:100%;text-align:center;}
+
+/* Drop zone */
+.drop-zone{border:2px dashed #ccc;border-radius:10px;padding:32px 20px;
+  text-align:center;cursor:pointer;transition:all 0.2s;background:#fafafa;}
+.drop-zone:hover,.drop-zone.drag-over{border-color:#0F6E56;background:#f0faf7;}
+.drop-zone .ico{font-size:40px;margin-bottom:10px;}
+.drop-zone .txt{font-size:15px;font-weight:600;color:#1a1a1a;}
+.drop-zone .hint{font-size:12px;color:#888;margin-top:6px;}
+
+/* File list */
+.file-list{display:flex;flex-direction:column;gap:8px;margin-top:16px;}
+.file-item{display:flex;align-items:center;gap:10px;background:#f5f5f5;
+  border-radius:8px;padding:10px 14px;border:1px solid #e0e0e0;}
+.file-icon{font-size:20px;flex-shrink:0;}
+.file-info{flex:1;min-width:0;}
+.file-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.file-meta{font-size:11px;color:#888;margin-top:2px;}
+.file-del{background:none;border:none;font-size:16px;color:#aaa;cursor:pointer;padding:4px;flex-shrink:0;}
+.file-del:hover{color:#E24B4A;}
+
+/* Mode toggle */
+.mode-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;}
+.mode-btn{padding:14px;border:2px solid #e0e0e0;border-radius:10px;
+  cursor:pointer;text-align:center;background:#fff;transition:all 0.15s;}
+.mode-btn.active{border-color:#1a1a1a;background:#1a1a1a;color:#fff;}
+.mode-btn .mode-title{font-size:14px;font-weight:600;}
+.mode-btn .mode-desc{font-size:11px;margin-top:4px;opacity:0.7;line-height:1.4;}
+
+/* Stats bar */
+.stats-bar{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:18px;}
+.stat{background:#f5f5f5;border-radius:8px;padding:12px 8px;text-align:center;border:1px solid #e8e8e8;}
+.stat-n{font-size:22px;font-weight:700;}
+.stat-l{font-size:10px;color:#888;margin-top:3px;text-transform:uppercase;letter-spacing:0.04em;}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;border:1px solid #e0e0e0;border-radius:8px;max-height:440px;overflow-y:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead{position:sticky;top:0;z-index:2;}
+th{background:#f5f5f5;padding:9px 12px;text-align:left;border-bottom:1px solid #e0e0e0;
+  font-size:11px;font-weight:600;color:#666;letter-spacing:0.05em;text-transform:uppercase;white-space:nowrap;}
+td{padding:9px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafafa;}
+.num{text-align:right;font-family:monospace;}
+.bc{font-family:monospace;font-size:12px;color:#888;}
+.src-tag{display:inline-block;padding:2px 6px;border-radius:4px;font-size:10px;font-weight:600;
+  background:#E6F1FB;color:#185FA5;white-space:nowrap;}
+.dup-row td{background:#FFF9E6;}
+
+/* Status */
+.status{padding:12px 16px;border-radius:8px;font-size:14px;margin-bottom:16px;line-height:1.6;}
+.status.ok{background:#E1F5EE;border:1px solid #9FE1CB;color:#0F6E56;}
+.status.warn{background:#FFF3CD;border:1px solid #FFC107;color:#856404;}
+.status.info{background:#E6F1FB;border:1px solid #A8CAEF;color:#185FA5;}
+
+/* Search */
+.search-row{display:flex;gap:10px;margin-bottom:12px;align-items:center;}
+.search-inp{flex:1;padding:9px 12px;font-size:13px;border:1.5px solid #ccc;
+  border-radius:8px;font-family:inherit;}
+.search-inp:focus{outline:none;border-color:#1a1a1a;}
+.count-lbl{font-size:12px;color:#888;white-space:nowrap;}
+
+.divider{border:none;border-top:1px solid #e8e8e8;margin:20px 0;}
+</style>
+</head>
+<body>
+
+<h1>📊 재고조사 파일 병합기</h1>
+<p class="sub">여러 명이 조사한 엑셀 파일을 하나로 합칩니다.<br>Kevin님 PC에서 크롬으로 실행하세요.</p>
+
+<!-- STEP 1: 파일 업로드 -->
+<div class="card">
+  <div class="card-title"><span class="step">1</span> 엑셀 파일 선택</div>
+
+  <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-inp').click()">
+    <div class="ico">📂</div>
+    <div class="txt">파일을 클릭하거나 드래그앤드롭</div>
+    <div class="hint">여러 파일 동시 선택 가능 · 재고조사_YYYY-MM-DD.xlsx</div>
+  </div>
+  <input type="file" id="file-inp" accept=".xlsx,.xls,.csv" multiple style="display:none" onchange="handleFiles(event.target.files)">
+
+  <div class="file-list" id="file-list"></div>
+</div>
+
+<!-- STEP 2: 병합 방식 -->
+<div class="card" id="step2" style="display:none">
+  <div class="card-title"><span class="step">2</span> 병합 방식 선택</div>
+
+  <div class="mode-row">
+    <div class="mode-btn active" id="mode-sum" onclick="setMode('sum')">
+      <div class="mode-title">🔢 수량 합산</div>
+      <div class="mode-desc">같은 바코드의<br>CTN/PCS를 더함</div>
+    </div>
+    <div class="mode-btn" id="mode-all" onclick="setMode('all')">
+      <div class="mode-title">📋 전체 유지</div>
+      <div class="mode-desc">모든 행을<br>그대로 표시</div>
+    </div>
+  </div>
+
+  <button class="btn btn-p btn-full" onclick="runMerge()">병합 실행 →</button>
+</div>
+
+<!-- STEP 3: 결과 -->
+<div class="card" id="step3" style="display:none">
+  <div class="card-title"><span class="step">3</span> 병합 결과</div>
+
+  <div id="result-status" class="status ok"></div>
+
+  <div class="stats-bar" id="result-stats"></div>
+
+  <div class="search-row">
+    <input class="search-inp" id="search-inp" placeholder="Search product name or barcode..." oninput="filterTable()">
+    <span class="count-lbl" id="count-lbl"></span>
+  </div>
+
+  <div class="tbl-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>No</th>
+          <th>Barcode</th>
+          <th>Product Name</th>
+          <th>Supplier</th>
+          <th class="num">CTN</th>
+          <th class="num">PCS</th>
+          <th class="num">총 PCS</th>
+          <th id="src-col-head">출처</th>
+        </tr>
+      </thead>
+      <tbody id="tbl-body"></tbody>
+    </table>
+  </div>
+
+  <div class="divider"></div>
+  <div style="display:flex;gap:10px;">
+    <button class="btn btn-a btn-full" onclick="doExport()">📥 엑셀 내보내기</button>
+    <button class="btn btn-full" onclick="resetAll()">처음부터</button>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// State
+// ============================================================
+let FILES = [];       // {name, rows:[{No,바코드,제품명,공급업체,CTN,PCS,총PCS,입력시간}]}
+let MERGE_ROWS = [];  // 병합된 결과
+let FILTERED = [];    // 검색 필터링된 결과
+let MODE = 'sum';     // 'sum' | 'all'
+
+// ============================================================
+// Drag & Drop
+// ============================================================
+const dz = document.getElementById('drop-zone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+});
+
+// ============================================================
+// File loading
+// ============================================================
+function handleFiles(fileList) {
+  Array.from(fileList).forEach(file => {
+    if (!file.name.match(/\.(xlsx|xls|csv)$/i)) return;
+    if (FILES.some(f => f.name === file.name)) return; // 중복 방지
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const wb = XLSX.read(ev.target.result, { type: 'array', cellText: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        const data = XLSX.utils.sheet_to_json(ws, { defval: '', raw: false });
+        if (!data.length) return;
+
+        // 컬럼 자동 매핑 (재고조사 앱 기본 포맷)
+        const rows = data.map((row, i) => {
+          const bc  = String(row['Barcode'] ?? row['바코드'] ?? row['barcode'] ?? '').trim();
+          const nm  = String(row['Product Name'] ?? row['제품명'] ?? row['Nama Produk'] ?? row['name'] ?? '').trim();
+          const vd  = String(row['Category'] ?? row['Supplier'] ?? row['공급업체'] ?? row['vendor'] ?? '').trim();
+          const ctn = parseInt(row['CTN']) || 0;
+          const pcs = parseInt(row['PCS']) || 0;
+          const tot = parseInt(row['총 PCS']) || 0;
+          const at  = String(row['Time'] ?? row['입력시간'] ?? row['Waktu'] ?? '').trim();
+          // 조사자 컬럼이 있으면 우선 사용, 없으면 파일명에서 추출
+          const investigator = String(row['Inspector'] ?? row['조사자'] ?? row['Petugas'] ?? '').trim();
+          const branchVal    = String(row['Branch']   ?? row['지점']   ?? row['Cabang']  ?? '').trim();
+          const placeVal     = String(row['Location'] ?? row['장소']   ?? row['Lokasi']  ?? '').trim();
+          const srcFromFile  = file.name.replace(/재고조사_?/,'').replace(/_?\d{4}-\d{2}-\d{2}/,'').replace(/\.(xlsx|xls|csv)$/i,'');
+          const srcLabel = [investigator, branchVal, placeVal].filter(Boolean).join(' · ') || srcFromFile || file.name;
+          return { barcode: bc, name: nm, vendor: vd, ctn, pcs, totalPcs: tot, at,
+            investigator, branch: branchVal, place: placeVal,
+            _src: srcLabel };
+        }).filter(r => r.barcode);
+
+        FILES.push({ name: file.name, rows });
+        renderFileList();
+        document.getElementById('step2').style.display = 'block';
+        document.getElementById('step3').style.display = 'none';
+      } catch(e) {
+        alert(`"${file.name}" 읽기 실패: ${e.message}`);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  });
+  document.getElementById('file-inp').value = '';
+}
+
+function renderFileList() {
+  const el = document.getElementById('file-list');
+  if (!FILES.length) { el.innerHTML = ''; return; }
+  el.innerHTML = FILES.map((f, i) => `
+    <div class="file-item">
+      <div class="file-icon">📄</div>
+      <div class="file-info">
+        <div class="file-name">${esc(f.name)}</div>
+        <div class="file-meta">${f.rows.length.toLocaleString()}개 항목</div>
+      </div>
+      <button class="file-del" onclick="removeFile(${i})" title="제거">✕</button>
+    </div>`).join('');
+}
+
+function removeFile(idx) {
+  FILES.splice(idx, 1);
+  renderFileList();
+  if (!FILES.length) {
+    document.getElementById('step2').style.display = 'none';
+    document.getElementById('step3').style.display = 'none';
+  }
+}
+
+// ============================================================
+// Mode
+// ============================================================
+function setMode(m) {
+  MODE = m;
+  document.getElementById('mode-sum').classList.toggle('active', m === 'sum');
+  document.getElementById('mode-all').classList.toggle('active', m === 'all');
+  document.getElementById('src-col-head').textContent = m === 'sum' ? 'Source' : 'Source';
+}
+
+// ============================================================
+// Merge
+// ============================================================
+function runMerge() {
+  if (!FILES.length) return;
+  const allRows = FILES.flatMap(f => f.rows);
+
+  if (MODE === 'sum') {
+    const map = new Map();
+    allRows.forEach(r => {
+      if (!r.barcode) return;
+      if (!map.has(r.barcode)) {
+        map.set(r.barcode, { barcode: r.barcode, name: r.name, vendor: r.vendor, ctn: 0, pcs: 0, _srcs: new Set() });
+      }
+      const m = map.get(r.barcode);
+      m.ctn += r.ctn;
+      m.pcs += r.pcs;
+      if (r._src) m._srcs.add(r._src.replace(/재고조사_?/,'').replace(/\.(xlsx|xls|csv)$/i,''));
+    });
+    MERGE_ROWS = Array.from(map.values()).map(r => ({
+      barcode: r.barcode, name: r.name, vendor: r.vendor,
+      ctn: r.ctn, pcs: r.pcs,
+      _srcLabel: [...r._srcs].join(', ')
+    }));
+  } else {
+    MERGE_ROWS = allRows.map(r => ({
+      barcode: r.barcode, name: r.name, vendor: r.vendor,
+      ctn: r.ctn, pcs: r.pcs,
+      _srcLabel: r._src ? r._src.replace(/재고조사_?/,'').replace(/\.(xlsx|xls|csv)$/i,'') : ''
+    }));
+  }
+
+  FILTERED = [...MERGE_ROWS];
+  renderResult();
+  document.getElementById('step3').style.display = 'block';
+  document.getElementById('step3').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ============================================================
+// Render result
+// ============================================================
+function renderResult() {
+  // Stats
+  const totalCTN = MERGE_ROWS.reduce((s, r) => s + (r.ctn || 0), 0);
+  const totalPCS = MERGE_ROWS.reduce((s, r) => s + (r.pcs || 0), 0);
+  const srcCount = new Set(FILES.map(f => f.name)).size;
+
+  document.getElementById('result-stats').innerHTML = `
+    <div class="stat"><div class="stat-n">${srcCount}</div><div class="stat-l">파일 수</div></div>
+    <div class="stat"><div class="stat-n">${MERGE_ROWS.length.toLocaleString()}</div><div class="stat-l">총 항목</div></div>
+    <div class="stat"><div class="stat-n">${totalCTN.toLocaleString()}</div><div class="stat-l">총 CTN</div></div>
+    <div class="stat"><div class="stat-n">${totalPCS.toLocaleString()}</div><div class="stat-l">총 PCS</div></div>`;
+
+  const dupBarcodes = MODE === 'all'
+    ? new Set(MERGE_ROWS.filter((r,i,a) => a.findIndex(x=>x.barcode===r.barcode)!==i).map(r=>r.barcode))
+    : new Set();
+
+  const modeLabel = MODE === 'sum' ? '바코드 기준 합산' : '전체 행 유지';
+  document.getElementById('result-status').innerHTML =
+    `✅ <strong>${FILES.length}개 파일</strong> 병합 완료 — ${modeLabel}` +
+    (dupBarcodes.size ? ` · <span style="color:#856404">⚠ 중복 바코드 ${dupBarcodes.size}개 (노란색 표시)</span>` : '');
+
+  document.getElementById('count-lbl').textContent = `${FILTERED.length.toLocaleString()}개`;
+  renderTable(dupBarcodes);
+}
+
+function renderTable(dupBarcodes) {
+  dupBarcodes = dupBarcodes || new Set(
+    MODE === 'all'
+      ? MERGE_ROWS.filter((r,i,a) => a.findIndex(x=>x.barcode===r.barcode)!==i).map(r=>r.barcode)
+      : []
+  );
+
+  const tbody = document.getElementById('tbl-body');
+  if (!FILTERED.length) {
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:32px;color:#aaa;">검색 결과 없음</td></tr>`;
+    return;
+  }
+  tbody.innerHTML = FILTERED.map((r, i) => {
+    const isDup = dupBarcodes.has(r.barcode);
+    return `<tr class="${isDup ? 'dup-row' : ''}">
+      <td style="color:#aaa;font-size:12px;">${i + 1}</td>
+      <td class="bc">${esc(r.barcode)}</td>
+      <td style="font-weight:500;">${esc(r.name)}</td>
+      <td style="color:#888;font-size:12px;">${esc(r.vendor || '')}</td>
+      <td class="num">${r.ctn || 0}</td>
+      <td class="num">${r.pcs || 0}</td>
+      <td class="num" style="color:#0F6E56;font-weight:600;">${(r.ctn||0) + (r.pcs||0)}</td>
+      <td><span class="src-tag">${esc(r._srcLabel || '')}</span></td>
+    </tr>`;
+  }).join('');
+  document.getElementById('count-lbl').textContent = `${FILTERED.length.toLocaleString()}개`;
+}
+
+// ============================================================
+// Search
+// ============================================================
+function filterTable() {
+  const q = document.getElementById('search-inp').value.trim().toLowerCase();
+  FILTERED = q
+    ? MERGE_ROWS.filter(r =>
+        r.barcode.toLowerCase().includes(q) ||
+        r.name.toLowerCase().includes(q) ||
+        (r.vendor || '').toLowerCase().includes(q))
+    : [...MERGE_ROWS];
+  renderTable();
+}
+
+// ============================================================
+// Export
+// ============================================================
+function doExport() {
+  if (!MERGE_ROWS.length) return;
+  const rows = MERGE_ROWS.map((r, i) => ({
+    'No': i + 1,
+    'Barcode': r.barcode,
+    'Product Name': r.name,
+    'Category': r.vendor || '',
+    'CTN': r.ctn,
+    'PCS': r.pcs,
+    'Source': r._srcLabel || ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  ws['!cols'] = [
+    { wch: 5 }, { wch: 16 }, { wch: 24 }, { wch: 14 },
+    { wch: 8 }, { wch: 8 }, { wch: 30 }
+  ];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '병합재고');
+  const date = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, `재고조사_병합_${date}.xlsx`);
+}
+
+// ============================================================
+// Reset
+// ============================================================
+function resetAll() {
+  FILES = []; MERGE_ROWS = []; FILTERED = [];
+  renderFileList();
+  document.getElementById('step2').style.display = 'none';
+  document.getElementById('step3').style.display = 'none';
+  document.getElementById('search-inp').value = '';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// ============================================================
+// Utils
+// ============================================================
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+</body>
+</html>
