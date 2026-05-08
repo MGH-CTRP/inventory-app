@@ -810,19 +810,30 @@ async function loadZXing() {
 
 async function startZXingScan() {
   try {
+    document.getElementById('cam-st').textContent = t('camConnecting');
+
+    // iOS 사파리: ZXing 전에 getUserMedia로 권한 팝업 먼저 띄움
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' } }
+      });
+    } catch(permErr) {
+      document.getElementById('cam-st').textContent = t('camNoPerm');
+      return;
+    }
+
+    // 권한 확인됐으면 스트림 해제 후 ZXing에게 넘김
+    stream.getTracks().forEach(tr => tr.stop());
+
     await loadZXing();
     const reader = new ZXingBrowser.BrowserMultiFormatReader();
-
-    // 후면 카메라 우선 선택
-    const devices = await ZXingBrowser.BrowserCodeReader.listVideoInputDevices();
-    const rear = devices.find(d => /back|rear|environment/i.test(d.label))
-                 || devices[devices.length - 1];
 
     document.getElementById('cam-st').textContent = t('camScanning');
     CAM_ON = true;
 
-    ZXING_CONTROLS = await reader.decodeFromVideoDevice(
-      rear?.deviceId,
+    ZXING_CONTROLS = await reader.decodeFromConstraints(
+      { video: { facingMode: { ideal: 'environment' } } },
       'v-cam',
       (result, err, controls) => {
         if (!CAM_ON) { controls?.stop(); return; }
@@ -1401,11 +1412,20 @@ function parseCompact(data) {
 
 async function loadMaster(force = false) {
   try {
-    const resp = await fetch('./master.json', { cache: 'no-store' });
+    // SW를 완전히 우회하기 위해 절대 URL 사용
+    const baseUrl = location.origin + location.pathname.replace(/[^/]*$/, '');
+    const url = baseUrl + 'master.json?_=' + Date.now();
+
+    const resp = await fetch(url, {
+      cache: 'no-store',
+      headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+    });
+
     if (!resp.ok) {
       toast(`⚠ master.json 로드 실패 (${resp.status})`, 4000);
       return;
     }
+
     const data = await resp.json();
     if (!data?.meta?.version) {
       toast('⚠ master.json 형식 오류', 4000);
@@ -1413,17 +1433,12 @@ async function loadMaster(force = false) {
     }
 
     const products = parseCompact(data);
-
-    // 빈 마스터는 저장하지 않음 — 나중에 진짜 마스터가 배포되면 다시 시도
     if (products.length === 0) return;
 
     const storedVer = await IDB.get('kv', 'master-version').catch(() => null) || '';
-
-    // 버전이 같고 강제 새로고침이 아니면 스킵
     if (data.meta.version === storedVer && !force) return;
 
     toast('📦 마스터 로드 중...', 60000);
-
     await IDB.saveMaster(products, data.meta.version, data.meta.updatedAt || '');
     PROD_MAP = new Map(products.map(p => [p.barcode, p]));
 
@@ -1434,7 +1449,8 @@ async function loadMaster(force = false) {
 
     refreshSettings();
   } catch(e) {
-    toast(`⚠ 마스터 로드 오류: ${e.message}`, 5000);
+    // 오프라인이거나 네트워크 오류 — 조용히 무시 (강제 로드 시에만 알림)
+    if (force) toast('⚠ 네트워크 오류 — 인터넷 연결을 확인하세요', 4000);
   }
 }
 
